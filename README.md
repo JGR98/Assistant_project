@@ -1,0 +1,2 @@
+# Assistant_project
+answer_level中的train_data是用于lora微调的数据集，分为了测试+训练，训练数据使用了10种话术当prompt，并且处理成了qwen的微调格式。
