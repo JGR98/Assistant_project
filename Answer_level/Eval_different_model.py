@@ -96,6 +96,7 @@ def get_score(baseline_path,gpt4_path):
             value.update({'gpt-answer':gpt[key]['gpt4-answer']})
             base_score=int(re.findall(r'\d+',str(value[args.model_name+'-answer']))[-1])
             gpt_score=int(re.findall(r'\d+', str(value['gpt-answer']))[-1])
+
             if base_score not in [0,1,2]:
                 print('baseline模型答案解析错误...')
                 base_score=1
@@ -103,11 +104,13 @@ def get_score(baseline_path,gpt4_path):
                 print('gpt模型答案解析错误...')
                 gpt_score = 1
             base_answer.append(base_score)
+
             gpt_answer.append(gpt_score)
         except:
             continue
     cm = confusion_matrix(gpt_answer, base_answer)
-    # cm_df=pd.DataFrame(cm,columns=['predict0','predict1','predict2'],index=['ac0','ac1','ac2'])
+    print(base_answer)
+    cm_df=pd.DataFrame(cm,columns=['predict0','predict1','predict2'],index=['ac0','ac1','ac2'])
     print(cm_df)
     print(Counter(gpt_answer))
 

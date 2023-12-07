@@ -71,5 +71,5 @@ for n, value in enumerate(data):
         ]
     }
     output.append(temp)
-with open(r'final_for_qwen/lora_data_v1_1205.json', 'w', encoding='utf-8') as f:
+with open(r'final_for_train/lora_data_v1_1205.json', 'w', encoding='utf-8') as f:
     json.dump(output,f,ensure_ascii=False,indent=2)
