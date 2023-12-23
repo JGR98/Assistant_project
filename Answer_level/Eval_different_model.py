@@ -40,6 +40,7 @@ def save_json_data(path, data):
         f.close()
     print('sus save')
 
+
 def format_change(data):
     output = []
     for value in data:
@@ -77,7 +78,20 @@ def generate_answer(input_path,output_path,model):
             continue
     save_json_data(path=output_path, data=output)
 
+def data_process(data_path,model):
+    with open('baseline_eval/org_data/'+data_path, "r", encoding='utf-8') as f:
+        data = json.load(f)
+        f.close()
+    output = []
+    for item in data:
+        output.append({'query': item['llm_out']['query'], 'hit_answer': item['llm_out']['hit_answer'],
+                       'input': item['llm_out']['input'], model: item[model+'-answer']})
+    with open('baseline_eval/data/'+data_path, "w", encoding='utf-8') as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+        f.close()
+
 def get_score(baseline_path,gpt4_path):
+    print('***start to get score')
     baseline=load_json_data_real(baseline_path)
     gpt4=load_json_data_real(gpt4_path)
     print(len(baseline))
@@ -86,23 +100,26 @@ def get_score(baseline_path,gpt4_path):
     base={}
     gpt={}
     for value in baseline:
-        base[value['query']]=value
+        base[value['query'].strip()]=value
     for value in gpt4:
-        gpt[value['query']] = value
+        gpt[value['query'].strip()] = value
     base_answer=[]
     gpt_answer=[]
+    not_align=0
     for key,value in base.items():
         try:
             value.update({'gpt-answer':gpt[key]['gpt4-answer']})
-            base_score=int(re.findall(r'\d+',str(value[args.model_name+'-answer']))[-1])
+
+            base_score=int(re.findall(r'\d+',str(value[args.model_name]))[-1])
             gpt_score=int(re.findall(r'\d+', str(value['gpt-answer']))[-1])
 
             if base_score not in [0,1,2]:
                 print('baseline模型答案解析错误...')
-                base_score=1
+                base_score=3
+                not_align+=1
             if gpt_score not in [0, 1, 2]:
                 print('gpt模型答案解析错误...')
-                gpt_score = 1
+                gpt_score = 3
             base_answer.append(base_score)
 
             gpt_answer.append(gpt_score)
@@ -110,9 +127,10 @@ def get_score(baseline_path,gpt4_path):
             continue
     cm = confusion_matrix(gpt_answer, base_answer)
     print(base_answer)
-    cm_df=pd.DataFrame(cm,columns=['predict0','predict1','predict2'],index=['ac0','ac1','ac2'])
+    cm_df=pd.DataFrame(cm,columns=['predict0','predict1','predict2','other'],index=['ac0','ac1','ac2','other'])
     print(cm_df)
-    print(Counter(gpt_answer))
+
+    print('不遵循指令',not_align)
 
 
 
@@ -121,11 +139,12 @@ def get_score(baseline_path,gpt4_path):
 
 if __name__ == '__main__':
     # 首先进行baseline跑结果
+    data_process(args.output,args.model_name)
     # generate_answer(args.input,args.output,model)
     # 与gpt4的结果进行对比，计算一致的
-    get_score(args.output,'baseline_vs/gpt4.json')
+    get_score('baseline_eval/data/'+args.output, 'baseline_eval/data/gpt4.json')
 
 
-"""python Eval_different_model.py --input retrieval_output/out_for_score.json --output baseline_vs/qwen14b.json --model_name qwen14b"""
+"""python Eval_different_model.py --input qwen18.json --output qwen18b_lora_1221.json --model_name qwen18b_lora"""
 
 

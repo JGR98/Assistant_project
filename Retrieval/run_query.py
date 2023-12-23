@@ -27,5 +27,5 @@ args = parser.parse_args()
 run(args.url, args.ifile, args.ofile)
 """
 
-python run_query.py --ifile input.1019.txt --ofile out.json --url "http://10.5.113.131:9001/invoke?json=true"
+python run_query.py --ifile 1019.txt --ofile out.json --url "http://10.5.113.131:9001/invoke?json=true"
 """

@@ -1,10 +1,11 @@
+import re
 import time
 from tqdm import tqdm
 import openai
 import json
-from Config import Config
 import statistics
 import argparse
+from Config import Config
 
 Config = Config()
 
@@ -61,8 +62,12 @@ def format_change(data):
 
 def generate_answer(input,gpt1,gpt2,output_path):
     output = []
-    retrieval_answer = load_json_data(input)
-    data = format_change(retrieval_answer)
+    # retrieval_answer = load_json_data(input)
+    # data = format_change(retrieval_answer)
+    with open(input, "r", encoding='utf-8') as f:
+        data = json.load(f)
+
+    # 这里是读取我检索后的数据就行
     for value in tqdm(data):
         try:
             prompt = '您是一个检索系统评估专家。您的任务是评估检索系统给出的信息，确定它们是否能够回答特定的问题。' \
@@ -70,13 +75,13 @@ def generate_answer(input,gpt1,gpt2,output_path):
                      '**评分标准**：\n ·如果有信息*能够回答*问题，或者通过*推理得出答案*，给予<2分>;\n ' \
                      '·如果根据信息*没有把握回答*问题，但是能*提供一些帮助*，给予<1分>;\n ·如果信息*不能回答问题*，也*没有提供任何帮助*，给予<0分>\n\n' \
                      '请在给出评分时，提供您的推理过程和判断依据。\n\n' \
-                     '### 问题:\n------------------------------------------------------------\n{query}' \
+                     '### 问题:\n------------------------------------------------------------\n{query}\n' \
                      '------------------------------------------------------------' \
-                     '\n\n### 检索答案:\n------------------------------------------------------------\n{answer}' \
+                     '\n\n### 检索答案:\n------------------------------------------------------------\n{answer}\n' \
                      '------------------------------------------------------------\n\n' \
                      '请给出理由和评分，格式为json{{"reason":<>,"score":<2> or <1> or <0>}}\n' \
-                     '提示：今年是2023年，去年是2022年，请注意判断时间信息和其他关键信息。'.format(query=value['query'], answer=value['hit_answer'])
-
+                     '提示：今年是2023年，去年是2022年，请注意判断时间信息和其他关键信息，注意标题中的实体是否能对应上问题。'.format(query=value['query'], answer=value['hit_report'])
+            # print(prompt)
             answer1 = gpt4(prompt, gpt1, Config.gpt4_version)
             answer2 = gpt4(prompt, gpt2, Config.gpt4_version)
             time.sleep(10)
@@ -84,6 +89,7 @@ def generate_answer(input,gpt1,gpt2,output_path):
             output.append(value)
         except:
             print('wrong')
+
             continue
     save_json_data(path=output_path, data=output)
 
@@ -93,18 +99,30 @@ def check_stable_answer(path):
     with open(path, "r", encoding='utf-8') as f:
         data = json.load(f)
     nums=0
+    wrong=0
     output=[]
     for value in data:
-        answer1 = json.loads(value['gpt4-answer1'])
-        answer2 = json.loads(value['gpt4-answer2'])
-        value.update({'score1': answer1['score'],'score2':answer2['score']})
-        if answer1['score']==answer2['score']:
-            value.update({'gpt4-answer':answer1})
-        else:
-            value.update({'diff': 1})
-            nums+=1
-        output.append(value)
+        try:
+            try:
+                answer1 = json.loads(value['gpt4-answer1'])
+                answer2 = json.loads(value['gpt4-answer2'])
+                value.update({'score1': answer1['score'], 'score2': answer2['score']})
+            except:
+                answer1 = str(value['gpt4-answer1'])
+                answer2 = str(value['gpt4-answer2'])
+                value.update({'score1': int(re.findall(r'\d+',answer1)[-1]), 'score2': int(re.findall(r'\d+',answer2)[-1])})
+
+            if value['score1']==value['score2']:
+                value.update({'gpt4-answer':answer1})
+            else:
+                value.update({'diff': 1})
+                nums+=1
+            output.append(value)
+        except:
+            wrong+=1
+
     print(nums)
+    print(wrong)
     return output
 
 
@@ -115,8 +133,10 @@ def regenerate_answer(data,output_path):
         if 'diff' in value.keys():
             prompt = '您是一个检索系统评估专家。您的任务是评估检索系统给出的信息，确定它们是否能够回答特定的问题。' \
                      '请注意，回答可能来自单条信息，或者通过多条信息的关联推理得出。请仔细分析每条信息，并给出总体评分。\n\n' \
-                     '**评分标准**：\n ·如果有信息*能够回答*问题，或者通过*推理得出答案*，给予<2分>;\n ' \
-                     '·如果根据信息*没有把握回答*问题，但是能*提供一些帮助*，给予<1分>;\n ·如果信息*不能回答问题*，也*没有提供任何帮助*，给予<0分>\n\n' \
+                     '**评分标准**：\n' \
+                     ' ·如果有信息*能够回答*问题，或者通过*推理得出答案*，给予<2分>;\n' \
+                     ' ·如果根据信息*没有把握回答*问题，但是能*提供一些帮助*，给予<1分>;\n' \
+                     ' ·如果信息*不能回答问题*，也*没有提供帮助*，给予<0分>\n\n' \
                      '请在给出评分时，提供您的推理过程和判断依据。\n\n' \
                      '### 问题:\n------------------------------------------------------------\n{query}' \
                      '------------------------------------------------------------' \
@@ -137,7 +157,7 @@ def regenerate_answer(data,output_path):
 
 if __name__ == '__main__':
     # 首先进行gpt4跑结果
-    generate_answer(args.input,args.gpt1,args.gpt2,args.output)
+    # generate_answer(args.input,args.gpt1,args.gpt2,args.output)
     # 然后检查结果是否一致
     data=check_stable_answer(args.output)
     # 不一致的重跑，然后以多数的作为最终结果
